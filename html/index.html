@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+<TITLE>Ryan's Silly Politics Plot</TITLE>
+<style>
+
+.links line {
+  stroke: #999;
+  stroke-opacity: 0.6;
+}
+
+.nodes circle {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+
+
+.svg-container {
+    display: inline-block;
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%;
+    vertical-align: top;
+    overflow: hidden;
+}
+.svg-content {
+    display: inline-block;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+
+.nodes text {
+  font-family: sans-serif;
+  font-size: 14px;
+}
+
+</style>
+</head>
+<body>
+<h1>Withdrawal vs Indicative Votes - Ayes</h1>
+<div id="container" class="svg-container">
+</div>
+
+<h2>Vote list</h2>
+  <ul id="divListUL"></ul>
+  
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5.1/dat.gui.min.js"></script>
+<script>
+
+var svg = d3.select("div#container")
+  .append("svg")
+  .attr("preserveAspectRatio", "xMinYMin meet")
+  .attr("viewBox", "0 0 1600 1200")
+  .classed("svg-content", true);
+
+var config = {
+          labels: true,
+          voteList: [655,656,657,658,659,660,661,662,664],
+          noes: false,
+          distance: 150,
+          linkstrength: 1,
+          attraction: -30
+        };
+config.voteString=config.voteList.join(",");
+
+insertControls();
+
+const dotcolours = ["#90EE90", "#0087dc", "#d50000", "#D3D3D3", "#FDBB30", "#FFF95D", "#ff0000","#3F8428","#DC143C","#F5FFFA","#00ff00","000000"];
+var scale = d3.scaleOrdinal(d3.schemeSet3);
+function myColours(d) {
+	if(d.group>0) return dotcolours[d.group];
+     return scale(d.id);
+}
+
+function circleRadius(d) {
+return 5*Math.log(d.value*5) ;	
+}
+
+var simulation = d3.forceSimulation()
+    .force("link", d3.forceLink().id(function(d) { return d.id; }).distance(config.distance).strength(config.linkstrength))
+    .force("charge", d3.forceManyBody().strength(config.attraction))
+    .force("center", d3.forceCenter(800, 600))
+	.force('collision', d3.forceCollide().radius(function(d) {return circleRadius(d);}));
+
+
+var firstTime=true;
+function update() {
+
+if(!firstTime) {
+
+d3.select('svg').selectAll('*').remove();
+}
+firstTime=false;
+
+
+if(config.noes) {
+d3.selectAll("h1").text("Indicative Votes - Noes");
+}
+else {
+d3.selectAll("h1").text("Indicative Votes - Ayes");
+}
+config.voteList=config.voteString.split(',').map(Number);
+
+var jsonFileList=["mpNodes.json"]
+for( var ind in config.voteList )
+{
+jsonFileList.push("division"+config.voteList[ind]+".json")
+}
+var promises=[];
+jsonFileList.forEach(function(url) {
+      promises.push(d3.json(url))
+});
+Promise.all(promises).then(function(jsonObjs) {
+var numObjs=jsonObjs.length;
+var nodeList=jsonObjs[0].nodes;
+var linkList=[];
+  var titleDict={};
+if(numObjs>1) {
+for(i=1;i<numObjs;i++) {
+  titleDict[config.voteList[i-1]]=jsonObjs[i].title;  
+if(config.noes) {
+   nodeList.push({group:0,id:jsonObjs[i].title,value:jsonObjs[i].noes.length});
+   linkList=linkList.concat(jsonObjs[i].noes);
+}
+else {
+   nodeList.push({group:0,id:jsonObjs[i].title,value:jsonObjs[i].ayes.length});
+   linkList=linkList.concat(jsonObjs[i].ayes);
+}
+}
+}
+//console.log(linkList);
+
+  var ul = d3.select('#divListUL').selectAll('li')
+        .remove()
+
+ var ul2 = d3.select('#divListUL').selectAll('li')
+	.data(config.voteList)
+        .text(function(d) {return d*2;})
+	.enter()
+	.append('li')
+	.html(String)
+        .text(function(d) {return d + "--" + titleDict[d];})
+
+  var link = svg.append("g")
+      .attr("class", "links")
+    .selectAll("line")
+    .data(linkList)
+    .enter().append("line")
+      .attr("stroke-width", function(d) { return Math.sqrt(d.value); });
+
+  var node = svg.append("g")
+      .attr("class", "nodes")
+    .selectAll("g")
+    .data(nodeList)
+    .enter().append("g")
+
+  var circles = node.append("circle")
+      .attr("r", function(d) { return circleRadius(d);})
+      .attr("fill", function(d) { return myColours(d); })
+      .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+
+  var labels = node.append("text")
+      .text(function(d) {
+        return d.id;
+      })
+      .style('font-size',function(d)  { return 5+(5*Math.log(d.value*5)) ; })
+      .attr('x', 0)
+      .attr('y', 10);
+
+  node.append("title")
+      .text(function(d) { return d.id; });
+
+  simulation
+      .nodes(nodeList)
+      .on("tick", ticked);
+
+  simulation.force("link")
+      .links(linkList);
+
+
+
+  function ticked() {
+    link
+        .attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; });
+
+    node
+        .attr("transform", function(d) {
+          return "translate(" + d.x + "," + d.y + ")";
+        })
+  }
+
+
+});
+}
+
+update();
+
+function dragstarted(d) {
+  if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x;
+  d.fy = d.y;
+}
+
+function dragged(d) {
+  d.fx = d3.event.x;
+  d.fy = d3.event.y;
+}
+
+function dragended(d) {
+  if (!d3.event.active) simulation.alphaTarget(0);
+  d.fx = null;
+  d.fy = null;
+}
+
+
+function getPresetJSON() {
+
+  return {
+"preset": "Indicative",
+  "remembered": {
+    "Default": {
+      "0": {
+        "voteString": "655,656,657,658,659,660,661,662,664",
+        "noes": false,
+        "distance": 150,
+        "linkstrength": 1,
+        "attraction": -30
+      }
+    },
+    "Indicative": {
+      "0": {
+        "voteString": "655,656,657,658,659,660,661,662",
+        "noes": false,
+        "distance": 150,
+        "linkstrength": 1,
+        "attraction": -30
+      }
+    }
+  },
+  "closed": false,
+  "folders": {
+    "Links": {
+      "preset": "Default",
+      "closed": true,
+      "folders": {}
+    },
+    "Dots": {
+      "preset": "Default",
+      "closed": true,
+      "folders": {}
+    }
+  }
+};
+}
+
+    function insertControls () {
+      var ctrls = new dat.GUI({width:250,load: getPresetJSON(), preset: 'Default'});
+      ctrls.remember(config);
+
+
+
+
+
+      voteCtrl = ctrls.add(config,"voteString");      
+      noesCtrl = ctrls.add(config, "noes");
+      var f1 = ctrls.addFolder('Links');
+      distCtrl = f1.add(config, "distance",1,400);
+      linkstrengthCtrl = f1.add(config, "linkstrength",0,40);
+      var f2 = ctrls.addFolder('Dots');
+      attractionCtrl = f2.add(config, "attraction",-100,10);
+      distCtrl.onChange(function(value) {
+         simulation.force("link").distance(config.distance);
+         simulation.alphaTarget(0.3).restart();;
+      });
+      linkstrengthCtrl.onChange(function(value) {
+         simulation.force("link").strength(config.linkstrength);
+         simulation.alphaTarget(0.3).restart();;
+      });
+      attractionCtrl.onChange(function(value) {
+         simulation.force("charge").strength(config.attraction);
+         simulation.alphaTarget(0.3).restart();;
+      });
+      noesCtrl.onChange(function(value) {
+        update();
+      });
+      voteCtrl.onFinishChange(function() {
+        update();
+      });
+}
+
+</script>
+<p>Here is a network map of parliamentary votes. The graph was made using the javascript library d3. All the data is taken from <a href="https://commonsvotes.digiminster.com" >Commons Votes</a>. Inspired by the map from Alexandre Afonso, <a href="https://alexandreafonso.me/2019/03/28/mapping-preferences-over-brexit-in-the-house-of-commons/">which is here.</a></p>
+</body>
