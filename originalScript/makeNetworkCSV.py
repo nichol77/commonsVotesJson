@@ -1,3 +1,12 @@
+# makeNetowrkCSV this script takes some downloaded CSV files from https://commonsvotes.digiminster.com and makes a new CSV
+# Deprecated
+'''
+    File name: makeNetowrkCSV
+    Author: Ryan Nichol
+    Date created: 01/04/2019
+    Date last modified: 01/04/2019
+    Python Version: 2.7
+'''
 
 
 import csv
