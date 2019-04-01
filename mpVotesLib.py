@@ -31,7 +31,7 @@ def getPartyIndex(partyString):
         "Democratic Unionist Party":Party.DUP,
         "Plaid Cymru":Party.PlaidCymru,
         "Sinn F?in":Party.SinnFein,
-        "Green":Party.Green,
+        "Green Party":Party.Green,
         "Speaker":Party.Speaker}.get(partyString,Party.Unknown) 
 
 
@@ -53,6 +53,9 @@ def getAyeNoLists(csvStringFromWebsite,title=''):
     ayeList=[]
     noList=[]
 
+#    print csvStringFromWebsite.splitlines()[0]
+    actualDivisionList=[int(s) for s in csvStringFromWebsite.splitlines()[0].split() if s.isdigit()]
+#    print actualDivision
     if title=='':
         title=csvStringFromWebsite.splitlines()[3]
     print "Working title",title
@@ -68,7 +71,7 @@ def getAyeNoLists(csvStringFromWebsite,title=''):
             noList.append(link)
     
 
-    return { "ayes":ayeList, "noes":noList, "title":title}
+    return { "ayes":ayeList, "noes":noList, "title":title, "division":actualDivisionList[0]}
 
      
 if __name__ == "__main__":
