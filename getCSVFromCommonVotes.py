@@ -52,9 +52,10 @@ def main(argv):
     data = response.read()
     #    print(data)
     if(makejson):
-        outfile=outputdir+"/division"+division+".json"
-        print "Writing JSON",outfile
-        outputThing=mpVotesLib.getAyeNoLists(data,title)        
+        outputThing=mpVotesLib.getAyeNoLists(data,title)
+        actualDivision=outputThing["division"]                                   
+        outfile=outputdir+"/division"+str(actualDivision)+".json"
+        print "Writing JSON",outfile     
         with open(outfile, 'w') as jsonfile:
             json.dump(outputThing, jsonfile)
             

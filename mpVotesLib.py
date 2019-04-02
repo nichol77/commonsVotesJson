@@ -64,7 +64,7 @@ def getAyeNoLists(csvStringFromWebsite,title=''):
     reader = csv.DictReader(csvStringFromWebsite.splitlines()[9:])
 
     for row in reader:
-        link={"source": row["Member"], "target": title, "value": 1}
+        link={"source": row["Member"], "target": str(actualDivisionList[0])+" - "+title, "value": 1}
         if(row["Vote"]=="Aye"):
             ayeList.append(link)
         elif(row["Vote"]=="No"):

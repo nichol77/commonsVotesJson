@@ -1,420 +1,463 @@
 <!DOCTYPE html>
 <html>
-<head>
-<TITLE>Political Islands</TITLE>
-<style>
+    <head>
+        <TITLE>Political Islands</TITLE>
+        <style>
+            
+            .links line {
+                stroke: #999;
+                stroke-opacity: 0.6;
+            }
+        
+        .nodes circle {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+        
+        
+        
+        .svg-container {
+            display: inline-block;
+            position: relative;
+            width: 80%;
+            padding-bottom: 80%;
+            vertical-align: top;
+            overflow: hidden;
+        }
+        .svg-content {
+            display: inline-block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        
+        .nodes text {
+            font-family: sans-serif;
+            font-size: 14px;
+        }
+        
+            </style>
+    </head>
+    <body>
+        <h1>Withdrawal vs Indicative Votes - Ayes</h1>
+        <div id="container" class="svg-container">
+        </div>
+        <div id="searchCont"></div>
+        <h2>Vote list</h2>
+        <ul id="divListUL"></ul>
+        <script src="https://d3js.org/d3.v5.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5.1/dat.gui.min.js"></script>
+        <script>
+            
+            // Create the SVG amd set aspect ratio... not sure what the best aspect ratio is
+            var svg = d3.select("div#container")
+            .append("svg")
+            .attr("preserveAspectRatio", "xMinYMin meet")
+            .attr("viewBox", "0 0 1600 1600")
+            .classed("svg-content", true);
+            
+            
+            // Call zoom for svg container.
+            svg.call(d3.zoom().on('zoom', zoomed));
+            
+            //This is the object used by dat.gui
+            var config = {
+                zoom: false,
+                labels: false,
+            //voteList: [655,656,657,658,659,660,661,662,664],
+ 	      voteList: [386,387,388,389,390,391,392,393,395],
+                noes: false,
+                distance: 150,
+                linkstrength: 1,
+                attraction: -30
+            };
+        config.voteString=config.voteList.join(",");
+        
+        //Function that actually draws the controls in the top corner
+        insertControls();
+        
+        //These are the colours of the politcial parties uisng the enumeration from mpVotesLib.Party
+        /*class Party:
+         Conservative = 1
+         Labour = 2
+         Independent = 3
+         LiberalDemocrat = 4
+         SNP = 5
+         DUP = 6
+         PlaidCymru=7
+         SinnFein=8
+         Green=9
+         Speaker=10
+         Unknown=11
+         Colours from https://en.wikipedia.org/wiki/Wikipedia:Index_of_United_Kingdom_political_parties_meta_attributes
+         */
+        const dotcolours = ["#90EE90", "#0087dc", "#dc241f", "#D3D3D3", "#FAA61A", "#FEF987", "#D46A4C","#008142","#326760","#6AB023","#000000","#000000"];
+        var scale = d3.scaleOrdinal(d3.schemeSet3);
+        //Colour the political parties as above and the votes using d3.schemeSet3
+        function myColours(d) {
+            if(d.group>0) return dotcolours[d.group];
+            return scale(d.id);
+        }
+        //Some function that grows the radius with number of connections
+        function circleRadius(d) {
+            return 5*Math.log(d.value*5) ;
+        }
+        // Here we set up the actual force simulation forces attract links, the collision force keeps circles from overlapping and centre tries to keep the dots on the screen
+        var simulation = d3.forceSimulation()
+        .force("link", d3.forceLink().id(function(d) { return d.id; }).distance(config.distance).strength(config.linkstrength))
+        .force("charge", d3.forceManyBody().strength(config.attraction))
+        .force("center", d3.forceCenter(800, 800))
+        .force('collision', d3.forceCollide().radius(function(d) {return circleRadius(d);}));
+        
+        // Container
+        var container = svg.append('g');
+        
+        // Create form for search (see function below).
+        var search = d3.select("div#searchCont").append('form').attr('onsubmit', 'return false;');
+        
+        var box = search.append('input')
+        .attr('type', 'text')
+        .attr('id', 'searchTerm')
+        .attr('placeholder', 'Type to search...');
+        
+        var searchButton = search.append('input')
+        .attr('type', 'button')
+        .attr('value', 'Search')
+        .on('click', function () { searchNodes(); });
+        
+        
+            
+        // Toggle for ego networks on click (below).
+        var toggle = 0;
+        
+        //The update function is the thing that does all the JSON manipulation
+        var firstTime=true;
+        function update() {
+            console.log("In update()");
+            if(!firstTime) {
+                container.selectAll('*').remove();
+            }
+            firstTime=false;
+            
+            
+            if(config.noes) {
+                d3.selectAll("h1").text("Indicative Votes - Noes");
+            }
+            else {
+                d3.selectAll("h1").text("Indicative Votes - Ayes");
+            }
+            config.voteList=config.voteString.split(',').map(Number);
+            
+            var jsonFileList=["mpNodes.json"]
+            for( var ind in config.voteList )
+            {
+                jsonFileList.push("division"+config.voteList[ind]+".json")
+            }
+            //Use promises to load the multiple JSON file
+            var promises=[];
+            jsonFileList.forEach(function(url)
+            {
+                promises.push(d3.json(url))
+            });
+            Promise.all(promises).then(function(jsonObjs)
+            {
+            var numObjs=jsonObjs.length;
+            var nodeList=jsonObjs[0].nodes;
+            var linkList=[];
+            var titleDict={};
+            if(numObjs>1) {
+            for(i=1;i<numObjs;i++)
+			{
+                        titleDict[config.voteList[i-1]]=jsonObjs[i].title;
+                        if(config.noes) {
+                        nodeList.push({group:0,id:jsonObjs[i].division+" - "+jsonObjs[i].title,value:jsonObjs[i].noes.length,title:jsonObjs[i].title});
+                        linkList=linkList.concat(jsonObjs[i].noes);
+                        }
+                        else {
+                        nodeList.push({group:0,id:jsonObjs[i].division+" - "+jsonObjs[i].title,value:jsonObjs[i].ayes.length,title:jsonObjs[i].title});
+                        linkList=linkList.concat(jsonObjs[i].ayes);
+                        }
+                        }
+                        }
+                        reverseNode={};
+                        nodeList.forEach(function(d,i) {
+                        reverseNode[d.id]=i;
+                        });
+                        // Make object of all neighboring nodes.
+                        var linkedByIndex = {};
+                        linkList.forEach(function(d) {
+                        linkedByIndex[reverseNode[d.source] + ',' + reverseNode[d.target]] = 1;
+                        linkedByIndex[reverseNode[d.target] + ',' + reverseNode[d.source]] = 1;
+                        });
+                        //		       console.log(linkedByIndex);
+                        // A function to test if two nodes are neighboring.
+                        function neighboring(a, b) {
+                        //  console.log(a.index + ',' + b.index);
+                        return linkedByIndex[a.index + ',' + b.index];
+                        }
+                        
+                        var ul = d3.select('#divListUL').selectAll('li')
+                        .remove()
+                        
+                        var ul2 = d3.select('#divListUL').selectAll('li')
+                        .data(config.voteList)
+                        .enter()
+                        .append('li')
+                        .append("a")
+                        .attr("href",function(d) {var newD=d+269; return "https://commonsvotes.digiminster.com/Divisions/Details/"+newD;} )
+                        .text(function(d) {return d + "--" + titleDict[d];});
+                        
+                        
+                        
+                        console.log("Here in the container");
+                        
+                        var link = container.append("g")
+                        .attr("class", "links")
+                        .selectAll("line")
+                        .data(linkList)
+                        .enter().append("line")
+                        .attr("stroke-width", function(d) { return Math.sqrt(d.value); });
+                        
+                        var node = container.append("g")
+                        .attr("class", "nodes")
+                        .selectAll("g")
+                        .data(nodeList)
+                        .enter().append("g")
+                        
+                        var circles = node.append("circle")
+                        .attr("r", function(d) { return circleRadius(d);})
+                        .attr("fill", function(d) { return myColours(d); })
+                        .attr('class', 'node')
+                        // On click, toggle ego networks for the selected node.
+                        .on('click', function(d, i) {
+                        if (toggle == 0) {
+                        // Ternary operator restyles links and nodes if they are adjacent.
+                        d3.selectAll('.link').style('stroke-opacity', function (l) {
+                        return l.target == d || l.source == d ? 1 : 0.1;
+                        });
+                        d3.selectAll('.node').style('opacity', function (n) {
+                        //		              console.log(d,n);
+                        return neighboring(d, n) ? 1 : 0.1;
+                        });
+                        d3.select(this).style('opacity', 1);
+                        toggle = 1;
+                        }
+                        else {
+                        // Restore nodes and links to normal opacity.
+                        d3.selectAll('.link').style('stroke-opacity', '0.6');
+                        d3.selectAll('.node').style('opacity', '1');
+                        toggle = 0;
+                        }
+                        })
+                        .call(d3.drag()
+                        .on("start", dragstarted)
+                        .on("drag", dragged)
+                        .on("end", dragended));
+                        
+                        var labels = node.append("text")
+                        .text(function(d) {
+			if(d.hasOwnProperty("title")) {
+			  return d.title;
+			 }
+                        return d.id;
+                        })
+                        .style('font-size',function(d)  { return 5+(5*Math.log(d.value*5)) ; })
+                        .attr('x', 0)
+                        .attr('y', 10);
+                        
+                        //  node.append("title")
+                        //      .text(function(d) { return d.id; });
+                        
+                        simulation
+                        .nodes(nodeList)
+                        .on("tick", ticked);
+                        
+                        simulation.force("link")
+                        .links(linkList);
 
-.links line {
-  stroke: #999;
-  stroke-opacity: 0.6;
-}
+			simulation.alphaTarget(0.3).restart();;
+                        
+                        
+                        function ticked() {
+                        link
+                        .attr("x1", function(d) { return d.source.x; })
+                        .attr("y1", function(d) { return d.source.y; })
+                        .attr("x2", function(d) { return d.target.x; })
+                        .attr("y2", function(d) { return d.target.y; });
+                        
+                        node
+                        .attr("transform", function(d) {
+                        return "translate(" + d.x + "," + d.y + ")";
+                        })
+                        }
 
-.nodes circle {
-  stroke: #fff;
-  stroke-width: 1.5px;
-}
-
-
-
-.svg-container {
-    display: inline-block;
-    position: relative;
-    width: 80%;
-    padding-bottom: 80%;
-    vertical-align: top;
-    overflow: hidden;
-}
-.svg-content {
-    display: inline-block;
-    position: absolute;
-    top: 0;
-    left: 0;
-}
-
-
-.nodes text {
-  font-family: sans-serif;
-  font-size: 14px;
-}
-
-</style>
-</head>
-<body>
-<h1>Withdrawal vs Indicative Votes - Ayes</h1>
-<div id="container" class="svg-container">
-</div>
-<div id="searchCont"></div>
-<h2>Vote list</h2>
-<ul id="divListUL"></ul>
-<script src="https://d3js.org/d3.v5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5.1/dat.gui.min.js"></script>
-<script>
-
-var svg = d3.select("div#container")
-  .append("svg")
-  .attr("preserveAspectRatio", "xMinYMin meet")
-  .attr("viewBox", "0 0 1600 1600")
-  .classed("svg-content", true);
-
-
-// Call zoom for svg container.
-svg.call(d3.zoom().on('zoom', zoomed));
-
-var config = {
-          zoom: false,
-          labels: true,
-          voteList: [655,656,657,658,659,660,661,662,664],
-          noes: false,
-          distance: 150,
-          linkstrength: 1,
-          attraction: -30
-        };
-config.voteString=config.voteList.join(",");
-
-insertControls();
-
-const dotcolours = ["#90EE90", "#0087dc", "#d50000", "#D3D3D3", "#FDBB30", "#FFF95D", "#ff0000","#3F8428","#DC143C","#00ff00","#F5FFFA","000000"];
-var scale = d3.scaleOrdinal(d3.schemeSet3);
-function myColours(d) {
-	if(d.group>0) return dotcolours[d.group];
-     return scale(d.id);
-}
-
-function circleRadius(d) {
-return 5*Math.log(d.value*5) ;	
-}
-
-var simulation = d3.forceSimulation()
-    .force("link", d3.forceLink().id(function(d) { return d.id; }).distance(config.distance).strength(config.linkstrength))
-    .force("charge", d3.forceManyBody().strength(config.attraction))
-    .force("center", d3.forceCenter(800, 800))
-	.force('collision', d3.forceCollide().radius(function(d) {return circleRadius(d);}));
-
-
-var container = svg.append('g');
-
-
-// Create form for search (see function below).
-
-var search = d3.select("div#searchCont").append('form').attr('onsubmit', 'return false;');
-
-var box = search.append('input')
-	.attr('type', 'text')
-	.attr('id', 'searchTerm')
-	.attr('placeholder', 'Type to search...');
-
-var searchButton = search.append('input')
-	.attr('type', 'button')
-	.attr('value', 'Search')
-.on('click', function () { searchNodes(); });
-
-
-
-
-// Toggle for ego networks on click (below).
-var toggle = 0;
-
-var firstTime=true;
-function update() {
-console.log("In update()");
-if(!firstTime) {
-container.selectAll('*').remove();
-}
-firstTime=false;
-
-
-if(config.noes) {
-d3.selectAll("h1").text("Indicative Votes - Noes");
-}
-else {
-d3.selectAll("h1").text("Indicative Votes - Ayes");
-}
-config.voteList=config.voteString.split(',').map(Number);
-
-var jsonFileList=["mpNodes.json"]
-for( var ind in config.voteList )
-{
-jsonFileList.push("division"+config.voteList[ind]+".json")
-}
-var promises=[];
-jsonFileList.forEach(function(url) {
-      promises.push(d3.json(url))
-});
-Promise.all(promises).then(function(jsonObjs) {
-var numObjs=jsonObjs.length;
-var nodeList=jsonObjs[0].nodes;
-var linkList=[];
-  var titleDict={};
-if(numObjs>1) {
-for(i=1;i<numObjs;i++) {
-  titleDict[config.voteList[i-1]]=jsonObjs[i].title;  
-if(config.noes) {
-   nodeList.push({group:0,id:jsonObjs[i].title,value:jsonObjs[i].noes.length});
-   linkList=linkList.concat(jsonObjs[i].noes);
-}
-else {
-   nodeList.push({group:0,id:jsonObjs[i].title,value:jsonObjs[i].ayes.length});
-   linkList=linkList.concat(jsonObjs[i].ayes);
-}
-		       }
-		       }
- reverseNode={};
-  nodeList.forEach(function(d,i) {
-		       reverseNode[d.id]=i;
-		       });
-		       // Make object of all neighboring nodes.
-  var linkedByIndex = {};
-		       linkList.forEach(function(d) {
-	  linkedByIndex[reverseNode[d.source] + ',' + reverseNode[d.target]] = 1;
-	  linkedByIndex[reverseNode[d.target] + ',' + reverseNode[d.source]] = 1;
-		       });
-//		       console.log(linkedByIndex);
-  // A function to test if two nodes are neighboring.
-		       function neighboring(a, b) {
-		     //  console.log(a.index + ',' + b.index);
-	  return linkedByIndex[a.index + ',' + b.index];
-  }
-
-  var ul = d3.select('#divListUL').selectAll('li')
-        .remove()
-
- var ul2 = d3.select('#divListUL').selectAll('li')
-	.data(config.voteList)
-	.enter()
-	.append('li')
-		       .append("a")
-        	       .attr("href",function(d) {return "https://commonsvotes.digiminster.com/Divisions/Details/"+d;} )
-        	       .text(function(d) {return d + "--" + titleDict[d];});
-     
-		       
-
-console.log("Here in the container");
-		       
-  var link = container.append("g")
-      .attr("class", "links")
-    .selectAll("line")
-    .data(linkList)
-    .enter().append("line")
-      .attr("stroke-width", function(d) { return Math.sqrt(d.value); });
-
-  var node = container.append("g")
-      .attr("class", "nodes")
-    .selectAll("g")
-    .data(nodeList)
-    .enter().append("g")
-
-  var circles = node.append("circle")
-      .attr("r", function(d) { return circleRadius(d);})
-      .attr("fill", function(d) { return myColours(d); })
-      .attr('class', 'node')
-      // On click, toggle ego networks for the selected node.
-		       .on('click', function(d, i) {
-	      if (toggle == 0) {
-		      // Ternary operator restyles links and nodes if they are adjacent.
-		      d3.selectAll('.link').style('stroke-opacity', function (l) {
-			      return l.target == d || l.source == d ? 1 : 0.1;
-		      });
-		       d3.selectAll('.node').style('opacity', function (n) {
-//		              console.log(d,n);
-			      return neighboring(d, n) ? 1 : 0.1;
-		      });
-		      d3.select(this).style('opacity', 1);
-		      toggle = 1;
-	      }
-	      else {
-		      // Restore nodes and links to normal opacity.
-		      d3.selectAll('.link').style('stroke-opacity', '0.6');
-		      d3.selectAll('.node').style('opacity', '1');
-		      toggle = 0;
-	      }
-      })
-      .call(d3.drag()
-          .on("start", dragstarted)
-          .on("drag", dragged)
-          .on("end", dragended));
-
-  var labels = node.append("text")
-      .text(function(d) {
-        return d.id;
-      })
-      .style('font-size',function(d)  { return 5+(5*Math.log(d.value*5)) ; })
-      .attr('x', 0)
-      .attr('y', 10);
-
-//  node.append("title")
-//      .text(function(d) { return d.id; });
-
-  simulation
-      .nodes(nodeList)
-      .on("tick", ticked);
-
-  simulation.force("link")
-      .links(linkList);
-
-
-
-  function ticked() {
-    link
-        .attr("x1", function(d) { return d.source.x; })
-        .attr("y1", function(d) { return d.source.y; })
-        .attr("x2", function(d) { return d.target.x; })
-        .attr("y2", function(d) { return d.target.y; });
-
-    node
-        .attr("transform", function(d) {
-          return "translate(" + d.x + "," + d.y + ")";
-        })
-  }
-
-
-});
-}
-
-update();
-
-function dragstarted(d) {
-  if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-  d.fx = d.x;
-  d.fy = d.y;
-}
-
-function dragged(d) {
-  d.fx = d3.event.x;
-  d.fy = d3.event.y;
-}
-
-function dragended(d) {
-  if (!d3.event.active) simulation.alphaTarget(0);
-  d.fx = null;
-  d.fy = null;
-}
-
-
-
-		       
-function mouseover() {
-  d3.select(this).select("circle").transition()
-      .duration(750)
-      .attr("r", 16);
-}
-
-		       
-
-function getPresetJSON() {
-
-  return {
-"preset": "Indicative",
-  "remembered": {
-    "Default": {
-		       "0": {
-		       "labels":true,
-        "voteString": "655,656,657,658,659,660,661,662,664",
-        "noes": false,
-        "distance": 150,
-        "linkstrength": 1,
-        "attraction": -30
-      }
-    },
-    "Indicative": {
-		       "0": {
-		       "labels":true,
-        "voteString": "655,656,657,658,659,660,661,662",
-        "noes": false,
-        "distance": 150,
-        "linkstrength": 1,
-        "attraction": -30
-      }
-    }
-  },
-  "closed": false,
-  "folders": {
-    "Links": {
-      "preset": "Default",
-      "closed": true,
-      "folders": {}
-    },
-    "Dots": {
-      "preset": "Default",
-      "closed": true,
-      "folders": {}
-    }
-  }
-};
-}
-
-    function insertControls () {
-		       var ctrls = new dat.GUI({width:250,load: getPresetJSON(), preset: 'Default'});
-		       ctrls.remember(config);
-		       voteCtrl = ctrls.add(config,"voteString");      
-		       noesCtrl = ctrls.add(config, "noes");    
-		       labelsCtrl = ctrls.add(config, "labels");
-		       var f1 = ctrls.addFolder('Links');
-		       distCtrl = f1.add(config, "distance",1,400);
-		       linkstrengthCtrl = f1.add(config, "linkstrength",0,40);
-		       var f2 = ctrls.addFolder('Dots');
-		       attractionCtrl = f2.add(config, "attraction",-100,10);
-		       ctrls.add(config,"zoom");
-		       
-      distCtrl.onChange(function(value) {
-         simulation.force("link").distance(config.distance);
-         simulation.alphaTarget(0.3).restart();;
-      });
-      linkstrengthCtrl.onChange(function(value) {
-         simulation.force("link").strength(config.linkstrength);
-         simulation.alphaTarget(0.3).restart();;
-      });
-      attractionCtrl.onChange(function(value) {
-         simulation.force("charge").strength(config.attraction);
-         simulation.alphaTarget(0.3).restart();;
-      });
-      noesCtrl.onChange(function(value) {
+            if(config.labels) {
+                        d3.selectAll('text').style('opacity', '0.6');
+                        }
+                        else {
+                        d3.selectAll('text').style('opacity', '0');
+                        }
+			
+                        
+                        });
+			}
+			
         update();
-      });
-      labelsCtrl.onChange(function(value) {
-		       if(config.labels) {
-		       d3.selectAll('text').style('opacity', '0.6');
-		       }
-		       else {
-		       d3.selectAll('text').style('opacity', '0');
-		       }
-      });
-      voteCtrl.onFinishChange(function() {
-        update();
-		       });
-
-
-		       }
-		       
-// Zooming function translates the size of the svg container.
-		       function zoomed() {
-		       if(config.zoom) {
-		       container.attr("transform", "translate(" + d3.event.transform.x + ", " + d3.event.transform.y + ") scale(" + d3.event.transform.k + ")");
-		       }
-}
-
-		       
-// Search for nodes by making all unmatched nodes temporarily transparent.
-function searchNodes() {
-		       var term = document.getElementById('searchTerm').value;
-		       var selected = container.selectAll('.node').filter(function (d, i) {
-		       return d.id.toLowerCase().search(term.toLowerCase()) == -1;
-		       });
-		       selected.style('opacity', '0');
-		       //		       selected.attr('r',100);
-		       var link = container.selectAll('line');
-		       var text = container.selectAll('text');
-		       text.style('opacity','0');
-		       link.style('stroke-opacity', '0');
-		       d3.selectAll('.node').transition()
-		       .duration(5000)
-		       .style('opacity', '1')
-		       d3.selectAll('line').transition().duration(5000).style('stroke-opacity', '0.6');
-		       if(config.labels) {
-		       d3.selectAll('text').transition().duration(5000).style('opacity', '0.6');
-		       }
-		       }
-	       
-
-</script>
-<p>Here is a network map of parliamentary votes. The graph was made using the javascript library d3. All the data is taken from <a href="https://commonsvotes.digiminster.com" >Commons Votes</a>. Inspired by the map from Alexandre Afonso, <a href="https://alexandreafonso.me/2019/03/28/mapping-preferences-over-brexit-in-the-house-of-commons/">which is here.</a></p>
-</body>
+        
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
+        
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+        
+        
+        
+        
+        function mouseover() {
+            d3.select(this).select("circle").transition()
+            .duration(750)
+            .attr("r", 16);
+        }
+        
+        
+        
+        function getPresetJSON() {
+            
+            return {
+                "preset": "Indicative",
+                "remembered": {
+                    "Default": {
+                        "0": {
+                            "labels":false,
+                            "voteString": "386,387,388,389,390,391,392,393,395",
+                            "noes": false,
+                            "distance": 150,
+                            "linkstrength": 1,
+                            "attraction": -30
+                        }
+                    },
+                    "Indicative": {
+                        "0": {
+                            "labels":false,
+                            "voteString": "386,387,388,389,390,391,392,393",
+                            "noes": false,
+                            "distance": 150,
+                            "linkstrength": 1,
+                            "attraction": -30
+                        }
+                    },
+                    "Indicative 2": {
+                        "0": {
+                            "labels":false,
+                            "voteString": "397,398,399,400",
+                            "noes": false,
+                            "distance": 150,
+                            "linkstrength": 1,
+                            "attraction": -30
+                        }
+                    }
+                },
+                "closed": false,
+                "folders": {
+                    "Links": {
+                        "preset": "Default",
+                        "closed": true,
+                        "folders": {}
+                    },
+                    "Dots": {
+                        "preset": "Default",
+                        "closed": true,
+                        "folders": {}
+                    }
+                }
+            };
+        }
+        
+        function insertControls () {
+            var ctrls = new dat.GUI({width:250,load: getPresetJSON(), preset: 'Default'});
+            ctrls.remember(config);
+            voteCtrl = ctrls.add(config,"voteString");
+            noesCtrl = ctrls.add(config, "noes");
+            labelsCtrl = ctrls.add(config, "labels");
+            var f1 = ctrls.addFolder('Links');
+            distCtrl = f1.add(config, "distance",1,400);
+            linkstrengthCtrl = f1.add(config, "linkstrength",0,40);
+            var f2 = ctrls.addFolder('Dots');
+            attractionCtrl = f2.add(config, "attraction",-100,10);
+            ctrls.add(config,"zoom");
+            
+            distCtrl.onChange(function(value) {
+                              simulation.force("link").distance(config.distance);
+                              simulation.alphaTarget(0.3).restart();;
+                              });
+	    linkstrengthCtrl.onChange(function(value) {
+                        simulation.force("link").strength(config.linkstrength);
+                        simulation.alphaTarget(0.3).restart();;
+                        });
+            attractionCtrl.onChange(function(value) {
+                        simulation.force("charge").strength(config.attraction);
+                        simulation.alphaTarget(0.3).restart();;
+                        });
+            noesCtrl.onChange(function(value) {
+                        update();
+                        });
+            labelsCtrl.onChange(function(value) {
+            if(config.labels) {
+                        d3.selectAll('text').style('opacity', '0.6');
+                        }
+                        else {
+                        d3.selectAll('text').style('opacity', '0');
+                        }
+                        });
+            voteCtrl.onFinishChange(function() {
+                        update();
+             });
+                                                                                                                                              
+                                                                                                                                              
+        }
+        
+        // Zooming function translates the size of the svg container.
+        function zoomed() {
+            if(config.zoom) {
+                container.attr("transform", "translate(" + d3.event.transform.x + ", " + d3.event.transform.y + ") scale(" + d3.event.transform.k + ")");
+            }
+        }
+        
+        
+        // Search for nodes by making all unmatched nodes temporarily transparent.
+        function searchNodes() {
+            var term = document.getElementById('searchTerm').value;
+            var selected = container.selectAll('.node').filter(function (d, i) {
+                                                               return d.id.toLowerCase().search(term.toLowerCase()) == -1;
+                                                               });
+                                                               selected.style('opacity', '0');
+                                                               //		       selected.attr('r',100);
+                                                               var link = container.selectAll('line');
+                                                               var text = container.selectAll('text');
+                                                               text.style('opacity','0');
+                                                               link.style('stroke-opacity', '0');
+                                                               d3.selectAll('.node').transition()
+                                                               .duration(5000)
+                                                               .style('opacity', '1')
+                                                               d3.selectAll('line').transition().duration(5000).style('stroke-opacity', '0.6');
+                                                               if(config.labels) {
+                                                                   d3.selectAll('text').transition().duration(5000).style('opacity', '0.6');
+                                                               }
+        }
+        
+        
+            </script>
+        <p>Here is a network map of parliamentary votes. The graph was made using the javascript library d3. All the data is taken from <a href="https://commonsvotes.digiminster.com" >Commons Votes</a>. Inspired by the map from Alexandre Afonso, <a href="https://alexandreafonso.me/2019/03/28/mapping-preferences-over-brexit-in-the-house-of-commons/">which is here.</a></p>
+    </body>
