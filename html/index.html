@@ -72,7 +72,7 @@
             attraction: -30,
             pause: false,
             search: '',
-            legend:false
+            legend: false
         };
         config.voteString = config.voteList.join(",");
 
@@ -125,7 +125,7 @@
         var firstTime = true;
         function update() {
             //Reset the colour scale
-            colourScale=d3.scaleOrdinal(d3.schemeSet3);
+            colourScale = d3.scaleOrdinal(d3.schemeSet3);
             //console.log("In update()");
             if (!firstTime) {
                 container.selectAll('*').remove();
@@ -292,15 +292,15 @@
         update();
 
         function toggleLegend() {
-            if(config.legend) {
-                svg.selectAll(".legend").style("display","block")
+            if (config.legend) {
+                svg.selectAll(".legend").style("display", "block")
             }
             else {
-                svg.selectAll(".legend").style("display","none")
+                svg.selectAll(".legend").style("display", "none")
             }
         }
 
-        function toggleLabels(timer=5) {
+        function toggleLabels(timer = 5) {
 
             if (config.labels) {
                 d3.selectAll('text.node').transition().duration(timer).style('opacity', '0.6');
@@ -391,6 +391,17 @@
                 }
             };
         }
+
+        function setTitle() {
+            if (config.noes) {
+                d3.selectAll("h1").text("Votes - Noes");
+            }
+            else {
+                d3.selectAll("h1").text("Votes - Ayes");
+            }
+
+        }
+
         //Add the little drop down gui
         function insertControls() {
             var ctrls = new dat.GUI({ width: 250, load: getPresetJSON(), preset: 'Default' });
@@ -403,11 +414,11 @@
             linkstrengthCtrl = f1.add(config, "linkstrength", 0, 40);
             var f2 = ctrls.addFolder('Dots');
             attractionCtrl = f2.add(config, "attraction", -100, 10);
-            zoomCtrl=ctrls.add(config, "zoom");
-            legCtrl=ctrls.add(config, "legend");
+            zoomCtrl = ctrls.add(config, "zoom");
+            legCtrl = ctrls.add(config, "legend");
             pauseCtrl = ctrls.add(config, "pause");
             searchCtrl = ctrls.add(config, "search");
-            legCtrl.onChange(function(value) {
+            legCtrl.onChange(function (value) {
                 toggleLegend();
             });
             pauseCtrl.onChange(function (value) {
@@ -434,7 +445,7 @@
             noesCtrl.onChange(function (value) {
                 update();
             });
-            labelsCtrl.onChange(function (value) {  
+            labelsCtrl.onChange(function (value) {
                 toggleLabels();
             });
             voteCtrl.onFinishChange(function () {
@@ -457,7 +468,7 @@
 
         // Search for nodes by making all unmatched nodes temporarily transparent.
         function searchNodes() {
-           // console.log("Searching for " + config.search)
+            // console.log("Searching for " + config.search)
             var term = config.search;
             var notselected = container.selectAll('.node').filter(function (d, i) {
                 return d.id.toLowerCase().search(term.toLowerCase()) == -1;
