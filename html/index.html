@@ -19,8 +19,8 @@
         .svg-container {
             display: inline-block;
             position: relative;
-            width: 80%;
-            padding-bottom: 80%;
+            width: 100%;
+            padding-bottom: 100%;
             vertical-align: top;
             overflow: hidden;
         }
@@ -41,12 +41,10 @@
 </head>
 
 <body>
-    <h1>Withdrawal vs Indicative Votes - Ayes</h1>
+    <h1>Votes - Ayes</h1>
     <div id="container" class="svg-container">
     </div>
     <div id="searchCont"></div>
-    <h2>Vote list</h2>
-    <ul id="divListUL"></ul>
     <script src="https://d3js.org/d3.v5.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5.1/dat.gui.min.js"></script>
     <script>
@@ -126,19 +124,16 @@
         //The update function is the thing that does all the JSON manipulation
         var firstTime = true;
         function update() {
-            console.log("In update()");
+            //Reset the colour scale
+            colourScale=d3.scaleOrdinal(d3.schemeSet3);
+            //console.log("In update()");
             if (!firstTime) {
                 container.selectAll('*').remove();
             }
             firstTime = false;
 
             //Just setting the title.... should probably remove indicative at some point
-            if (config.noes) {
-                d3.selectAll("h1").text("Indicative Votes - Noes");
-            }
-            else {
-                d3.selectAll("h1").text("Indicative Votes - Ayes");
-            }
+            setTitle();
             config.voteList = config.voteString.split(',').map(Number);
 
             var jsonFileList = ["mpNodes.json"]
@@ -185,21 +180,6 @@
                     return linkedByIndex[a.index + ',' + b.index];
                 }
 
-                var ul = d3.select('#divListUL').selectAll('li')
-                    .remove()
-
-                var ul2 = d3.select('#divListUL').selectAll('li')
-                    .data(config.voteList)
-                    .enter()
-                    .append('li')
-                    .append("a")
-                    .attr("href", function (d) { var newD = d + 269; return "https://commonsvotes.digiminster.com/Divisions/Details/" + newD; })
-                    .text(function (d) { return d + "--" + titleDict[d]; });
-
-
-
-                console.log("Here in the container");
-
                 var link = container.append("g")
                     .attr("class", "links")
                     .selectAll("line")
@@ -225,7 +205,6 @@
                                 return l.target == d || l.source == d ? 1 : 0.1;
                             });
                             d3.selectAll('.node').style('opacity', function (n) {
-                                //		              console.log(d,n);
                                 return neighboring(d, n) ? 1 : 0.1;
                             });
                             d3.select(this).style('opacity', 1);
@@ -282,14 +261,10 @@
                             return "translate(" + d.x + "," + d.y + ")";
                         })
                 }
+                toggleLabels();
+                //Try to add a legend for the votes, first remove the old one
+                svg.selectAll(".legend").remove();
 
-                if (config.labels) {
-                    d3.selectAll('text').style('opacity', '0.6');
-                }
-                else {
-                    d3.selectAll('text').style('opacity', '0');
-                }
-                //Try to add a legend for the votes
                 var legend = svg.selectAll(".legend")
                     .data(colourScale.domain())
                     .enter().append("g")
@@ -309,17 +284,31 @@
                     .style("text-anchor", "end")
                     .text(function (d) { return d; });
 
-                if(config.legend) {
-                    svg.selectAll(".legend").style("display","block")
-                }
-                else {
-                    svg.selectAll(".legend").style("display","none")
-                }
+                toggleLegend();
 
             });
         }
 
         update();
+
+        function toggleLegend() {
+            if(config.legend) {
+                svg.selectAll(".legend").style("display","block")
+            }
+            else {
+                svg.selectAll(".legend").style("display","none")
+            }
+        }
+
+        function toggleLabels(timer=5) {
+
+            if (config.labels) {
+                d3.selectAll('text.node').transition().duration(timer).style('opacity', '0.6');
+            }
+            else {
+                d3.selectAll('text.node').transition().duration(timer).style('opacity', '0');
+            }
+        }
 
         function dragstarted(d) {
             if (!d3.event.active) simulation.alphaTarget(0.3).restart();
@@ -419,12 +408,7 @@
             pauseCtrl = ctrls.add(config, "pause");
             searchCtrl = ctrls.add(config, "search");
             legCtrl.onChange(function(value) {
-                if(config.legend) {
-                    svg.selectAll(".legend").style("display","block")
-                }
-                else {
-                    svg.selectAll(".legend").style("display","none")
-                }
+                toggleLegend();
             });
             pauseCtrl.onChange(function (value) {
                 if (config.pause) {
@@ -450,13 +434,8 @@
             noesCtrl.onChange(function (value) {
                 update();
             });
-            labelsCtrl.onChange(function (value) {
-                if (config.labels) {
-                    d3.selectAll('text').style('opacity', '0.6');
-                }
-                else {
-                    d3.selectAll('text').style('opacity', '0');
-                }
+            labelsCtrl.onChange(function (value) {  
+                toggleLabels();
             });
             voteCtrl.onFinishChange(function () {
                 update();
@@ -478,7 +457,7 @@
 
         // Search for nodes by making all unmatched nodes temporarily transparent.
         function searchNodes() {
-            console.log("Searching for " + config.search)
+           // console.log("Searching for " + config.search)
             var term = config.search;
             var notselected = container.selectAll('.node').filter(function (d, i) {
                 return d.id.toLowerCase().search(term.toLowerCase()) == -1;
@@ -487,7 +466,6 @@
             var selected = container.selectAll('.node').filter(function (d, i) {
                 return d.id.toLowerCase().search(term.toLowerCase()) > -1;
             });
-            console.log(selected);
             selected.attr("r", function (d) { return 2 * circleRadius(d); })
             //		       selected.attr('r',100);
             var link = container.selectAll('line');
@@ -502,12 +480,7 @@
                 .style('opacity', '1')
                 .attr("r", function (d) { return circleRadius(d); })
             d3.selectAll('line').transition().duration(5000).style('stroke-opacity', '0.6');
-            if (config.labels) {
-                d3.selectAll('text').transition().duration(5000).style('opacity', '0.6');
-            }
-            else {
-                d3.selectAll('text').transition().duration(5000).style('opacity', '0');
-            }
+            toggleLabels(5000);
         }
 
 
