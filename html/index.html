@@ -73,7 +73,8 @@
             linkstrength: 1,
             attraction: -30,
             pause: false,
-            search: ''
+            search: '',
+            legend:false
         };
         config.voteString = config.voteList.join(",");
 
@@ -96,11 +97,11 @@
          Colours from https://en.wikipedia.org/wiki/Wikipedia:Index_of_United_Kingdom_political_parties_meta_attributes
          */
         const dotcolours = ["#90EE90", "#0087dc", "#dc241f", "#D3D3D3", "#FAA61A", "#FEF987", "#D46A4C", "#008142", "#326760", "#6AB023", "#000000", "#000000"];
-        var scale = d3.scaleOrdinal(d3.schemeSet3);
+        var colourScale = d3.scaleOrdinal(d3.schemeSet3);
         //Colour the political parties as above and the votes using d3.schemeSet3
         function myColours(d) {
             if (d.group > 0) return dotcolours[d.group];
-            return scale(d.id);
+            return colourScale(d.id);
         }
         //Some function that grows the radius with number of connections
         function circleRadius(d) {
@@ -288,7 +289,32 @@
                 else {
                     d3.selectAll('text').style('opacity', '0');
                 }
+                //Try to add a legend for the votes
+                var legend = svg.selectAll(".legend")
+                    .data(colourScale.domain())
+                    .enter().append("g")
+                    .attr("class", "legend")
+                    .attr("transform", function (d, i) { return "translate(0," + i * 20 + ")"; });
 
+                legend.append("rect")
+                    .attr("x", 1600 - 18)
+                    .attr("width", 18)
+                    .attr("height", 18)
+                    .style("fill", colourScale);
+
+                legend.append("text")
+                    .attr("x", 1600 - 24)
+                    .attr("y", 9)
+                    .attr("dy", ".70em")
+                    .style("text-anchor", "end")
+                    .text(function (d) { return d; });
+
+                if(config.legend) {
+                    svg.selectAll(".legend").style("display","block")
+                }
+                else {
+                    svg.selectAll(".legend").style("display","none")
+                }
 
             });
         }
@@ -388,10 +414,18 @@
             linkstrengthCtrl = f1.add(config, "linkstrength", 0, 40);
             var f2 = ctrls.addFolder('Dots');
             attractionCtrl = f2.add(config, "attraction", -100, 10);
-            ctrls.add(config, "zoom");
+            zoomCtrl=ctrls.add(config, "zoom");
+            legCtrl=ctrls.add(config, "legend");
             pauseCtrl = ctrls.add(config, "pause");
             searchCtrl = ctrls.add(config, "search");
-
+            legCtrl.onChange(function(value) {
+                if(config.legend) {
+                    svg.selectAll(".legend").style("display","block")
+                }
+                else {
+                    svg.selectAll(".legend").style("display","none")
+                }
+            });
             pauseCtrl.onChange(function (value) {
                 if (config.pause) {
                     simulation.stop();
@@ -444,7 +478,7 @@
 
         // Search for nodes by making all unmatched nodes temporarily transparent.
         function searchNodes() {
-            console.log("Searching for "+config.search)
+            console.log("Searching for " + config.search)
             var term = config.search;
             var notselected = container.selectAll('.node').filter(function (d, i) {
                 return d.id.toLowerCase().search(term.toLowerCase()) == -1;
@@ -454,14 +488,14 @@
                 return d.id.toLowerCase().search(term.toLowerCase()) > -1;
             });
             console.log(selected);
-            selected.attr("r", function (d) { return 2*circleRadius(d); })
+            selected.attr("r", function (d) { return 2 * circleRadius(d); })
             //		       selected.attr('r',100);
             var link = container.selectAll('line');
             var text = container.selectAll('text');
             text.style('opacity', '0');
             link.style('stroke-opacity', '0');
 
-            selected.style('opacity','0.6');
+            selected.style('opacity', '0.6');
 
             d3.selectAll('.node').transition()
                 .duration(5000)
